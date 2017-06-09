@@ -1,0 +1,9 @@
+# Put your custom commands here that should be executed once
+# the system init finished. By default this file does nothing.
+
+/usr/bin/led.sh 1 > /dev/null 2>&1 &
+
+# start l2cm_libuci process for topology 
+
+sleep 3
+l2cm_libuci > /dev/null &

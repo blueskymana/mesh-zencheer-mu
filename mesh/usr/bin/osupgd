@@ -1,0 +1,12 @@
+#!/bin/sh
+
+firmware=openwrt-ar71xx-generic-ap147-010-squashfs-sysupgrade.bin
+wget -c -P /tmp http://download.nexfi.cn:8000/nexfi_products/zencheer-mu/mu580w/bin/$firmware
+
+if [ -f "/tmp/$firmware" ];
+then
+    sysupgrade -n /tmp/$firmware
+fi
+
+
+

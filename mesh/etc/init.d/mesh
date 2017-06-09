@@ -1,0 +1,61 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=20
+
+USE_PROCD=1
+
+channel=$(uci get mesh.@mesh-iface[0].channel)
+mesh_iface=$(uci get mesh.@mesh-iface[0].mesh_iface)
+wlan=$(uci get mesh.@mesh-iface[0].wlan)
+ssid=$(uci get mesh.@mesh-iface[0].ssid)
+bridge=$(uci get mesh.@mesh-iface[0].bridge)
+htmode=$(uci get mesh.@mesh-iface[0].htmode)
+ipaddr=$(uci get mesh.@lan-iface[0].ipaddr)
+ifname=$(uci get mesh.@lan-iface[0].ifname)
+netmask=$(uci get mesh.@lan-iface[0].netmask)
+
+ignore=$(uci get dhcp.@dhcp[0].ignore)
+
+MP=/usr/bin/mp
+BRCTL=/usr/sbin/brctl
+IFCONFIG=/sbin/ifconfig
+SLEEP=/bin/sleep
+
+
+start_service() {
+
+# management port configuration.
+    $SLEEP 3
+    $IFCONFIG $ifname $ipaddr netmask $netmask
+    ebtables.sh
+}
+
+reload_service() {
+    restart
+}
+
+stop_service() {
+    #$BRCTL delif $bridge $mesh_iface
+    #$MP del $mesh_iface
+    logger -s "stop_service"
+}
+
+service_running() {
+    logger -s "service_running"
+}
+
+service_triggers()
+{
+    logger -s "service_triggers"
+}
+
+restart() {
+    stop
+    sleep 1
+    start
+}
+
+shutdown() {
+    logger -s "shutdown"
+}

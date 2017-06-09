@@ -1,0 +1,40 @@
+config wifi-device  radio0
+        option type     mac80211
+        option channel  11
+        option hwmode   11ng
+	    option path	    'platform/qca953x_wmac'
+	    option htmode	HT20
+        option chanbw   20
+        option txpower  30
+        option distance 1000
+
+config wifi-iface
+        option device radio0
+        option ifname wlan0
+        option network lan
+        option mode ap
+        option ssid mu580w
+        option encryption psk-mixed
+        option key 12345678
+
+config wifi-device  radio1
+        option type     mac80211
+        option channel  3
+        option hwmode   11g
+	    option path	    'pci0000:00/0000:00:00.0'
+	    option htmode	HT20
+        option short_gi_20 1
+        option ldpc     1
+        option chanbw   10
+        option txpower  30
+        option distance 10000
+
+config wifi-iface
+        option device radio1
+        option ifname adhoc0
+        option network batnet
+        option mode adhoc
+        option ssid NexFi00
+        option encryption none
+        option bssid 00:0B:27:E8:E4:3D
+
