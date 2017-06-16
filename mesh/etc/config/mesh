@@ -36,6 +36,12 @@ config lan-iface
     option    ipaddr    '172.16.16.16'
     option    ifname    'br-lan:slave'
     option    netmask   '255.255.0.0'
+
+# link tq threshold
+config net-led
+    option    alpha 230
+    option    beta  200
+    option    timeout 3
     
 ##################################################    
 #

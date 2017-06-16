@@ -1,351 +1,143 @@
-#!/bin/sh
-# leds driver interface file
+#!/bin/sh 
 
-LED_PATH="/sys/devices/platform/leds-gpio/leds"
+# multi-base color led mechanism.
 
-GREEN_TRIGGER="nexfi:green/trigger" 
-RED_TRIGGER="nexfi:red/trigger"
-ZQ_GREEN_TRIGGER="ap147:led:green/trigger" 
-ZQ_RED_TRIGGER="ap147:led:red/trigger"
+leds_path="/sys/devices/platform/leds-gpio/leds"
 
-TRI_RED="nexfi:tb-red/brightness"
-TRI_GREEN="nexfi:tb-green/brightness"
-TRI_BLUE="nexfi:tb-blue/brightness"
-ZQ_TRI_RED="ap147:led:red/brightness"
-ZQ_TRI_GREEN="ap147:led:green/brightness"
+netled_gpio1_brightness=ap147:green:lan3/brightness
+netled_gpio2_brightness=ap147:green:lan4/brightness
 
-TRI_RED_TRIGGER="nexfi:tb-red/trigger"
-TRI_GREEN_TRIGGER="nexfi:tb-green/trigger"
+netled_gpio1_trigger=ap147:green:lan3/trigger
+netled_gpio2_trigger=ap147:green:lan4/trigger
 
-
-# wireless channel.
-get_channel_freq()
-{
-    return $(iw dev adhoc0 info | grep channel | awk -F ' ' '{ print $2 }')
+netled_init() {
+    echo none > $leds_path/$netled_gpio1_trigger 
+    echo none > $leds_path/$netled_gpio2_trigger 
+    echo 1 > $leds_path/$netled_gpio1_brightness 
+    echo 1 > $leds_path/$netled_gpio2_brightness 
 }
 
-# network led control
-trig_green()
-{
-    echo $1 > $LED_PATH/$GREEN_TRIGGER
+netled_green_on() {
+    netled_init
+    echo 0 > $leds_path/$netled_gpio1_brightness 
+    echo 1 > $leds_path/$netled_gpio2_brightness 
 }
 
-# system led control
-trig_red()
-{
-    echo $1 > $LED_PATH/$RED_TRIGGER
+netled_magenta_on() {
+    netled_init
+    echo 0 > $leds_path/$netled_gpio1_brightness 
+    echo 0 > $leds_path/$netled_gpio2_brightness 
 }
 
-ZQ_trig_green()
-{
-    echo $1 > $LED_PATH/$ZQ_GREEN_TRIGGER
-}
-
-# system led control
-ZQ_trig_red()
-{
-    echo $1 > $LED_PATH/$ZQ_RED_TRIGGER
-}
-# tri-base color control
-turn_on_tri_red()
-{
-    echo 1 > $LED_PATH/$TRI_RED
-    echo 1 > $LED_PATH/$TRI_GREEN
-    echo 1 > $LED_PATH/$TRI_BLUE
-}
-ZQ_turn_on_tri_red()
-{
-    echo 0 > $LED_PATH/$ZQ_TRI_RED
-    echo 1 > $LED_PATH/$ZQ_TRI_GREEN
-}
-
-turn_on_tri_green()
-{
-    echo 0 > $LED_PATH/$TRI_RED
-    echo 0 > $LED_PATH/$TRI_GREEN
-    echo 1 > $LED_PATH/$TRI_BLUE
-}
-
-ZQ_turn_on_tri_green()
-{
-    echo 1 > $LED_PATH/$ZQ_TRI_RED
-    echo 0 > $LED_PATH/$ZQ_TRI_GREEN
- }
-turn_on_tri_blue()
-{
-    echo 0 > $LED_PATH/$TRI_RED
-    echo 1 > $LED_PATH/$TRI_GREEN
-    echo 0 > $LED_PATH/$TRI_BLUE
-}
-ZQ_turn_on_tri_yellow()
-{
-    echo 0 > $LED_PATH/$ZQ_TRI_RED
-    echo 0 > $LED_PATH/$ZQ_TRI_GREEN
- }
-
-turn_off_tri_all()
-{
-    echo 0 > $LED_PATH/$TRI_RED
-    echo 1 > $LED_PATH/$TRI_GREEN
-    echo 1 > $LED_PATH/$TRI_BLUE
-}
- ZQ_turn_off_tri_all ()
- {
-    echo 1 > $LED_PATH/$ZQ_TRI_RED
-    echo 1 > $LED_PATH/$ZQ_TRI_GREEN
- }
-trig_tri_red()
-{
-    echo $1 > $LED_PATH/$TRI_RED_TRIGGER
-}
-
-trig_tri_green()
-{
-    echo $1 > $LED_PATH/$TRI_GREEN_TRIGGER
+netled_red_on() {
+    netled_init
+    echo 1 > $leds_path/$netled_gpio1_brightness 
+    echo 0 > $leds_path/$netled_gpio2_brightness 
 }
 
 
-# network led finite state machine.
-state_join="join"
-state_alone="alone"
-state_none="none"
-priv_state=$state_none
-
-net_led_fsm_init()
-{
-    priv_state=$state_none
+netled_red_blink() {
+    netled_init
+    echo timer > $leds_path/$netled_gpio2_trigger 
 }
 
-ping_mac() {
-    mac=$1
-    a=$(/usr/sbin/batctl ping -c 1 -t 1 "$mac")
-    return $?
-}
+# Communication Link Quality  Finite-State-Machine strategy.
+tq_state_lv1="lv1"
+tq_state_lv2="lv2"
+tq_state_lv3="lv3"
+tq_state_init="init"
+priv_tq_state=$tq_state_init
+curr_tq_state="tq_state_init"
 
-net_led_fsm()
+tq_th_alpha=$(uci get mesh.@net-led[0].alpha)
+tq_th_beta=$(uci get mesh.@net-led[0].beta)
+
+linktq_fsm()
 {
-    nexhop=$(batctl n | sed '1,2 d' | grep -v "range")
-    
-    #all_nodes_mac=$(/usr/sbin/batctl n | grep -v 'B.A.T' | grep -v 'Neighbor' | awk '{print $2,$4}')
-    all_nodes_mac=$(/usr/sbin/batctl o | grep -v 'B.A.T' | grep -v 'Nexthop' | awk '{print $2"@"$4}')
-    mac_resp=1
+    tq=$1
 
-    #for mac in $all_nodes_mac
-        #do ping_mac $mac
-        #ping_resp=$?
-        #echo "ping mac:" $mac " resp:" $ping_resp
-        #if [ $ping_resp == 0 ];
-        #then
-  #          echo "set mac_resp to 0"
-        #    mac_resp=0
-        #    break
-        #fi
-  #  done
-  
-  for node in $all_nodes_mac
-        do
-        mac_addr=$(/bin/echo $node | awk -F '@' '{print $1}')
-        tp=$(/bin/echo $node | awk -F '@' '{print $2}')
-        echo $mac_addr
-        tp_real=${tp:1:3}
-        ping_mac $mac_addr
-        ping_resp=$?
-
-        if [ $ping_resp == 0 ];
-        then
-                echo "set mac_resp to 0"
-                ZQ_trig_red "default-on"
-                if [ $tp_real -gt 200 ];
-                then
-                        ZQ_turn_on_tri_green
-                        echo "tp_real grea than 200"
-                else
-                        ZQ_turn_on_tri_yellow
-                        echo "tp_real less than 200"
-                fi
-                mac_resp=0
-                break
-        fi
-done
-
-    echo "mac_resp: " $mac_resp
-
-    if [ -z "$nexhop" ]
+    if [ $tq -gt $tq_th_alpha ];
     then
-        curr_state=$state_alone 
+        curr_tq_state=$tq_state_lv1
+    elif [ $tq -gt $tq_th_beta ];
+    then
+        curr_tq_state=$tq_state_lv2
     else
-        if [ $mac_resp == 0 ];
-        then
-            curr_state=$state_join
-        else
-            curr_state=$state_alone
-        fi
+        curr_tq_state=$tq_state_lv3
+    fi
+    
+
+    if [ "$curr_tq_state" != "$priv_tq_state" ];
+    then
+        case $curr_tq_state in
+            $tq_state_lv1 )
+                netled_green_on
+                ;;
+            $tq_state_lv2 )
+                netled_magenta_on
+                ;;
+            $tq_state_lv3 )
+                netled_red_on
+                ;;
+            * )
+                echo "lnktq_fsm function error."
+                ;;
+        esac
+        priv_tq_state=$curr_tq_state
+    fi
+}
+
+# Network led  Finite-State-Machine strategy.
+led_state_join="join"
+led_state_alone="alone"
+led_state_init="init"
+priv_led_state=$led_state_init
+curr_led_state=$led_state_init
+timeout_thresh=$(uci get mesh.@net-led[0].timeout)
+
+
+netled_fsm()
+{
+    max_tq=0
+    nodes_val=$(batctl o | grep -v 'B.A.T' | grep -v 'Nexthop' | sed s/*//g | awk '{print $2"@"$3"@"$4}')
+
+    for i in $nodes_val
+    do
+        df=$(/bin/echo $i | awk -F "@" '{print $1}')
+        tq=$(/bin/echo $i | awk -F "@" '{print $2 $3}')
+
+        tq_real=$(echo $tq | sed s/[[:space:]]//g | awk -F "(" '{print $2}' | awk -F ")" '{print $1}')
+        [ $(echo $df | awk -F "\." '{print $1}') -lt $timeout_thresh ] && [ $max_tq -lt $tq_real ] && max_tq=$tq_real
+    done
+
+    # batctl o | grep -v 'B.A.T' | grep -v 'Nexthop'
+
+    if [ $max_tq -eq 0 ]
+    then
+        curr_led_state=$led_state_alone 
+    else
+        curr_led_state=$led_state_join
     fi 
 
-    if [ "$curr_state" != "$priv_state" ]
+    [ "$curr_led_state" = "$led_state_join" ] && linktq_fsm $max_tq  
+
+    if [ "$curr_led_state" != "$priv_led_state" ]
     then
-        case $curr_state in
-            $state_join )
-                  ZQ_trig_red "default-on"
-                if [ $tp_real -gt 200 ];
-                then          
-                                                                        ZQ_turn_on_tri_green 
-                else
-                                                                 ZQ_turn_on_tri_yellow 
-                fi
-                #trig_green "default-on"
-                #sleep 10
-                #ZQ_trig_red "default-on"
-                #ZQ_turn_on_tri_green       
-                ;;
-            $state_alone )
-                #trig_green "timer"
-                ZQ_turn_off_tri_all
-                ZQ_trig_red "timer"
+        case $curr_led_state in
+            $led_state_alone )
+                netled_red_blink
                 ;;
             * )
-                echo "net_led_fsm function state error."
                 ;;
         esac
-
-        priv_state=$curr_state
+        priv_led_state=$curr_led_state
     fi
+
 }
 
-# tri-base color finite state machine.
-state_tri_red="tri-red"
-state_tri_blue="tri-blue"
-state_tri_green="tri-green"
-state_tri_none="tri_none"
-tri_priv_state=$state_tri_none
-
-tri_led_fsm_init()
-{
-    tri_priv_state=$state_tri_none
-}
-
-
-tri_led_fsm()
-{
-    get_channel_freq
-    channel=$?
-
-    tri_curr_state=$state_tri_none
-    case $channel in
-        "3" )
-           tri_curr_state=$state_tri_red 
-            ;;
-        "8" )
-            tri_curr_state=$state_tri_green
-            ;;
-        "11" )
-            tri_curr_state=$state_tri_blue
-            ;;
-        * )
-            tri_curr_state=$state_tri_none
-            ;;
-    esac
-
-    if [ "$tri_priv_state" != "$tri_curr_state" ]
-    then
-        case $tri_curr_state in
-            $state_tri_blue )
-                turn_on_tri_blue 
-                ;;
-            $state_tri_red )
-                turn_on_tri_red
-                ;;
-            $state_tri_green )
-                turn_on_tri_green 
-                ;;
-            * )
-                #turn_off_tri_all
-                ;;
-        esac
-        
-        tri_priv_state=$tri_curr_state
-    fi
-}
-
-
-LEDPIPE="/tmp/ledfifo"
-state_tbled_red_blink_on="tbled:red:blink:on:0"
-state_tbled_red_blink_off="tbled:red:blink:off"
-state_tbled_green_blink_on_1="tbled:green:blink:on:1"
-state_tbled_none="none"
-priv_state_led_sync=$state_tbled_none
-blink_time="0"
-is_blink="0"
-
-led_sync_fsm_init()
-{
-    priv_state_led_sync=$state_led_none
-}
-#syc led fsm
-led_sync_fsm()
-{
-    curr_state=""
-    read -t 1 curr_state <> $LEDPIPE 
-    if [ -z "$curr_state" ];
-    then
-        curr_state=$state_tbled_none
-    fi
-
-    if [ "$curr_state" = "$state_tbled_red_blink_on" ];
-    then
-        turn_off_tri_all
-        trig_tri_red timer
-        priv_state_led_sync=$state_tbled_red_blink_on
-    elif [ "$curr_state" = "$state_tbled_red_blink_off" ];
-    then
-        trig_tri_red none
-        net_led_fsm_init
-        tri_led_fsm_init
-        priv_state_led_sync=$state_tbled_none
-    fi
-
-    if [ "$curr_state" = "$state_tbled_green_blink_on_1" ];
-    then
-        blink_time="2"
-        if [ "$is_blink" = "0" ];
-        then
-            is_blink="1"
-            turn_off_tri_all
-            trig_tri_green timer
-            priv_state_led_sync=$state_tbled_green_blink_on_1
-        fi
-    fi
-
-    if [ $blink_time -gt "0" ];
-    then
-        blink_time=`expr $blink_time - 1`
-    fi
-
-    if [ "$is_blink" = "1" ] && [ $blink_time -eq "0" ];
-    then
-        turn_off_tri_all
-        trig_tri_green none
-        led_sync_fsm_init
-        net_led_fsm_init
-        tri_led_fsm_init
-        is_blink="0"
-        priv_state_led_sync=$state_tbled_none
-    fi
-
-    if [ "$priv_state_led_sync" = "$state_tbled_none" ];
-    then
-        net_led_fsm
-        tri_led_fsm
-    fi
-}
-
-
-
-ZQ_trig_red "timer"
-ZQ_trig_green "none"
-ZQ_turn_off_tri_all
-
+# main program loop.
 while :
 do
-    led_sync_fsm
+    netled_fsm
+    sleep 1
 done
